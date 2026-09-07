@@ -1,0 +1,50 @@
+{
+  "name": "sinwan-router",
+  "version": "0.1.0",
+  "description": "Client-side router for Sinwan apps — declarative route matching, params, lazy loading, and prefetching built on Sinwan's reactivity system.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "development": "./src/index.ts"
+    }
+  },
+  "keywords": [
+    "sinwan",
+    "router",
+    "client-side",
+    "routing",
+    "navigation",
+    "reactivity",
+    "spa"
+  ],
+  "author": "Mohammed Ben Cheikh",
+  "license": "MIT",
+  "bugs": "https://github.com/sinwanjs/sinwan-router/issues",
+  "homepage": "https://sinwanjs.com",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sinwanjs/sinwan-router"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "bun run build.ts",
+    "test": "bun test --coverage",
+    "typecheck": "bunx tsc -p tsconfig.json"
+  },
+  "peerDependencies": {
+    "sinwan": ">=1.0.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "bun-plugin-sinwan": "^0.2.5",
+    "happy-dom": "^20.9.0",
+    "typescript": "^5"
+  }
+}
