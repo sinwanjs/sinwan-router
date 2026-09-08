@@ -8,7 +8,7 @@
   "homepage": "https://sinwanjs.com",
   "repository": {
     "type": "git",
-    "url": "https://github.com/sinwanjs/sinwan-router"
+    "url": "git+https://github.com/sinwanjs/sinwan-router.git"
   },
   "type": "module",
   "main": "./dist/index.js",

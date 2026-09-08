@@ -64,8 +64,8 @@ jobs:
           node-version: '24'
           registry-url: 'https://registry.npmjs.org'
 
-      - name: Publish to npm
-        run: npm publish --provenance --access public
+      - name: Stage on npm
+        run: npm stage publish --access public
 
   # ─── Create GitHub Release ─────────────────────────────────
   release:
