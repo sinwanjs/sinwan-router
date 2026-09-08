@@ -11,7 +11,14 @@ import type { SinwanComponent, SinwanNode } from "sinwan/component";
 import { computed } from "sinwan/reactivity";
 import { useRouter } from "./hooks.ts";
 import { isLazyComponent } from "./router.ts";
+import type { Router } from "./router.ts";
 import type { MatchedRoute } from "./types.ts";
+import {
+  jsxClass,
+  shouldInterceptLinkClick,
+  type LinkInterceptOptions,
+} from "./link-nav.ts";
+import { computeOutletKey, getMatchAtDepth } from "./outlet.ts";
 
 // ─── Link ──────────────────────────────────────────────────
 
@@ -20,6 +27,28 @@ export interface LinkProps {
   prefetch?: boolean;
   class?: string;
   children?: SinwanNode;
+  target?: string;
+  download?: string | boolean;
+  rel?: string;
+}
+
+function onLinkClick(
+  event: MouseEvent,
+  href: string,
+  router: Router,
+  options: LinkInterceptOptions,
+): void {
+  if (!shouldInterceptLinkClick(event, href, router.path, options)) return;
+  event.preventDefault();
+  router.navigate(href);
+}
+
+function downloadAttr(
+  download: string | boolean | undefined,
+): string | undefined {
+  if (download === undefined || download === false) return undefined;
+  if (download === true) return "";
+  return download;
 }
 
 /**
@@ -27,16 +56,25 @@ export interface LinkProps {
  * Uses the router from context (provide(RouterKey, router)).
  */
 export const Link = cc<LinkProps>(
-  ({ href, prefetch = true, class: cls, children }) => {
+  ({
+    href,
+    prefetch = true,
+    class: cls,
+    children,
+    target,
+    download,
+    rel,
+  }) => {
     const router = useRouter();
     return (
       <a
         href={href}
         class={cls}
+        target={target}
+        download={downloadAttr(download)}
+        rel={rel}
         onclick={(e: MouseEvent) => {
-          if (e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;
-          e.preventDefault();
-          router.navigate(href);
+          onLinkClick(e, href, router, { target, download });
         }}
         onmouseenter={() => {
           if (prefetch) router.prefetch(href);
@@ -59,26 +97,32 @@ export interface NavLinkProps extends LinkProps {
  * Uses the router from context.
  */
 export const NavLink = cc<NavLinkProps>(
-  ({ href, prefetch = true, activeClass = "active", class: cls, children }) => {
+  ({
+    href,
+    prefetch = true,
+    activeClass = "active",
+    class: cls,
+    children,
+    target,
+    download,
+    rel,
+  }) => {
     const router = useRouter();
-    const isActive = computed(() => {
-      const current = router.path;
-      return current === href || current.startsWith(href + "/");
-    });
+    const className = computed(() =>
+      router.path === href || router.path.startsWith(href + "/")
+        ? `${cls ?? ""} ${activeClass}`.trim()
+        : (cls ?? ""),
+    );
 
     return (
       <a
         href={href}
-        class={
-          (() =>
-            isActive.value
-              ? `${cls ?? ""} ${activeClass}`.trim()
-              : (cls ?? "")) as any
-        }
+        class={jsxClass(() => className.value)}
+        target={target}
+        download={downloadAttr(download)}
+        rel={rel}
         onclick={(e: MouseEvent) => {
-          if (e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;
-          e.preventDefault();
-          router.navigate(href);
+          onLinkClick(e, href, router, { target, download });
         }}
         onmouseenter={() => {
           if (prefetch) router.prefetch(href);
@@ -95,58 +139,43 @@ export const NavLink = cc<NavLinkProps>(
 export interface RouterOutletProps {
   fallback?: SinwanComponent;
   notFound?: SinwanComponent;
+  error?: SinwanComponent<{ error?: unknown }>;
   /** Depth of this outlet (0 = top-level, 1 = nested in parent route). */
   depth?: number;
 }
 
-// Cache for lazy component resolution.
-const lazyCache = new Map<string, SinwanComponent>();
+const DefaultNotFound = cc(() => <div>404 - Page not found</div>);
+const DefaultLoading = cc(() => <div>Loading...</div>);
+const DefaultError = cc<{ error?: unknown }>(() => (
+  <div>Failed to load page</div>
+));
 
-/**
- * Resolve a route component (sync or lazy, with cache).
- * Returns null if the component is lazy and not yet loaded.
- */
-function resolveRouteComponent(
+function resolveOutletNode(
   matched: MatchedRoute,
-  router: ReturnType<typeof useRouter>,
-  fallback?: SinwanComponent,
-): SinwanComponent | null {
+  router: Router,
+  fallback: SinwanComponent,
+  errorComp: SinwanComponent<{ error?: unknown }>,
+): SinwanNode {
   const route = matched.route;
-  const cacheKey = matched.matchedPath;
-
   if (!isLazyComponent(route.component)) {
-    return route.component as SinwanComponent;
+    const Comp = route.component;
+    return <Comp />;
   }
 
-  const cached = lazyCache.get(cacheKey);
-  if (cached) return cached;
-
-  // Kick off async load
-  route.component().then((mod) => {
-    lazyCache.set(cacheKey, mod.default);
-    router.navigate(router.path, { replace: true });
-  });
-
-  return fallback ?? null;
-}
-
-/**
- * Walk the matched route chain to a specific depth.
- * depth=0 → root match, depth=1 → first child, etc.
- */
-function getMatchAtDepth(
-  matched: MatchedRoute | null,
-  depth: number,
-): MatchedRoute | null {
-  if (!matched) return null;
-  let current: MatchedRoute | undefined = matched;
-  // Walk to the deepest match first, then walk back `depth` steps
-  const chain: MatchedRoute[] = [];
-  while (current) {
-    chain.unshift(current);
-    current = current.parent;
+  const cacheKey = matched.matchedPath;
+  const state = router.peekLazy(cacheKey);
+  if (state.status === "ready") {
+    const Comp = state.component;
+    return <Comp />;
   }
-  return chain[depth] ?? null;
+  if (state.status === "error") {
+    const ErrorView = errorComp;
+    return <ErrorView error={state.error} />;
+  }
+
+  router.ensureLazy(cacheKey, route.component);
+  const Fallback = fallback;
+  return <Fallback />;
 }
 
 /**
@@ -155,34 +184,21 @@ function getMatchAtDepth(
  * Uses the router from context.
  */
 export const RouterOutlet = cc<RouterOutletProps>(
-  ({ fallback, notFound, depth = 0 }) => {
+  ({ fallback, notFound, error, depth = 0 }) => {
     const router = useRouter();
-
-    const DefaultNotFound = cc(() => <div>404 - Page not found</div>);
-    const DefaultLoading = cc(() => <div>Loading...</div>);
+    const Fallback = fallback ?? DefaultLoading;
+    const NotFound = notFound ?? DefaultNotFound;
+    const ErrorView = error ?? DefaultError;
 
     return (
-      <Key when={() => router.path}>
+      <Key when={() => computeOutletKey(router, depth)}>
         {() => {
           const matched = getMatchAtDepth(router.matched, depth);
           if (!matched) {
-            // Only show 404 at the top level; nested outlets render nothing
-            if (depth > 0) return null as any;
-            const NF = notFound ?? DefaultNotFound;
-            return <NF />;
+            if (depth > 0) return null;
+            return <NotFound />;
           }
-
-          const Comp = resolveRouteComponent(
-            matched,
-            router,
-            fallback ?? DefaultLoading,
-          );
-          if (!Comp) {
-            const FB = fallback ?? DefaultLoading;
-            return <FB />;
-          }
-
-          return <Comp />;
+          return resolveOutletNode(matched, router, Fallback, ErrorView);
         }}
       </Key>
     );

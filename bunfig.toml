@@ -1,0 +1,11 @@
+jsx = "react-jsx"
+jsxImportSource = "sinwan"
+
+[test]
+root = "__tests__"
+coverageSkipTestFiles = true
+coveragePathIgnorePatterns = [
+  "**/__tests__/**",
+  "**/node_modules/**",
+  "**/sinwan/dist/**",
+]

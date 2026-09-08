@@ -82,7 +82,8 @@ export function useRoute() {
  * ```
  */
 export function useNavigate(): (to: string, options?: NavigateOptions) => void {
-  return useRouter().navigate.bind(useRouter());
+  const router = useRouter();
+  return router.navigate.bind(router);
 }
 
 /**

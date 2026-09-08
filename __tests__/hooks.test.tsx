@@ -38,7 +38,7 @@ function createMockInstance(
 }
 
 const Home = cc(() => <div>Home</div>);
-const UserProfile = cc<{ id: string }>(({ id }) => <div>User {id}</div>);
+const UserProfile = cc(() => <div>User</div>);
 
 const routes = [
   { path: "/", component: Home },

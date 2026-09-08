@@ -7,16 +7,16 @@ import type { SinwanComponent } from "sinwan/component";
 // ─── Route Definitions ─────────────────────────────────────
 
 /** A component that can be rendered by a route. */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type RouteComponent<P extends object = any> =
-  | SinwanComponent<P>
-  | LazyComponent<P>;
+export type RouteComponent =
+  | SinwanComponent
+  | LazyComponent;
 
 /** A lazy-loaded component factory. */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type LazyComponent<P extends object = any> = () => Promise<{
-  default: SinwanComponent<P>;
-}>;
+export type LazyComponent = (() => Promise<{
+  default: SinwanComponent;
+}>) & {
+  _SinwanLazy?: true;
+};
 
 /** A single route definition. */
 export interface RouteDefinition {
@@ -73,3 +73,10 @@ export interface RouterContextValue {
   /** All registered routes. */
   readonly routes: RouteDefinition[];
 }
+
+/** Snapshot of a lazy route's load state. */
+export type LazyPeek =
+  | { status: "ready"; component: SinwanComponent }
+  | { status: "error"; error: unknown }
+  | { status: "loading" }
+  | { status: "idle" };

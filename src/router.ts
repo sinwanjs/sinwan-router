@@ -6,12 +6,15 @@
  * SSR-safe: all DOM access is guarded by `typeof window` checks.
  */
 
-import { signal, computed, effect } from "sinwan/reactivity";
+import { signal, computed } from "sinwan/reactivity";
 import type { Signal, Computed } from "sinwan/reactivity";
+import type { SinwanComponent } from "sinwan/component";
 import type {
   RouteDefinition,
   MatchedRoute,
   NavigateOptions,
+  LazyComponent,
+  LazyPeek,
 } from "./types.ts";
 import {
   createRadixTree,
@@ -22,18 +25,29 @@ import {
   type RadixNode,
 } from "./matcher.ts";
 
-/** Check if a value is a lazy component (function without _SinwanComponent). */
-export function isLazyComponent(comp: unknown): comp is () => Promise<{
-  default: import("sinwan/component").SinwanComponent<any>;
-}> {
-  return typeof comp === "function" && !(comp as any)._SinwanComponent;
+function hasTrueFlag(value: object, key: string): boolean {
+  return key in value && (value as Record<string, unknown>)[key] === true;
 }
 
-/** Cache for lazy-loaded components. */
-const lazyCache = new Map<
-  string,
-  import("sinwan/component").SinwanComponent<any>
->();
+/**
+ * True for explicit `lazy()` factories, `_SinwanLazy` brands, and zero-arg
+ * `() => import(...)` loaders. `cc` components and functions that take props
+ * are not treated as lazy importers.
+ */
+export function isLazyComponent(comp: unknown): comp is LazyComponent {
+  if (typeof comp !== "function") return false;
+  if (hasTrueFlag(comp, "_SinwanComponent")) return false;
+  if (hasTrueFlag(comp, "_SinwanLazy")) return true;
+  return comp.length === 0;
+}
+
+/** Mark a dynamic import factory as a lazy route component. */
+export function lazy(
+  loader: () => Promise<{ default: SinwanComponent }>,
+): LazyComponent {
+  const factory = (): Promise<{ default: SinwanComponent }> => loader();
+  return Object.assign(factory, { _SinwanLazy: true as const });
+}
 
 /** Internal leaf data stored in the radix tree. */
 interface LeafData {
@@ -52,11 +66,16 @@ export class Router {
   private readonly _searchParams: Signal<URLSearchParams>;
   private readonly _matched: Computed<MatchedRoute | null>;
   private readonly _params: Computed<Record<string, string>>;
+  private readonly lazyCache = new Map<string, SinwanComponent>();
+  private readonly lazyErrors = new Map<string, unknown>();
+  private readonly lazyInflight = new Map<string, Promise<SinwanComponent>>();
+  private readonly _lazyTick: Signal<number>;
   private popstateHandler: (() => void) | null = null;
 
   constructor(routes: RouteDefinition[], initialPath?: string) {
     this.tree = createRadixTree();
     this.routeList = [];
+    this._lazyTick = signal(0);
 
     // Insert all routes (including nested) into the radix tree.
     // Static segments are inserted first so they're checked before
@@ -140,6 +159,63 @@ export class Router {
     }
   }
 
+  private bumpLazyTick(): void {
+    this._lazyTick.value = this._lazyTick.value + 1;
+  }
+
+  /** Reactive counter bumped when a lazy load succeeds or fails. */
+  get lazyTick(): number {
+    return this._lazyTick.value;
+  }
+
+  /** Current load snapshot for a lazy cache key (pattern). */
+  peekLazy(cacheKey: string): LazyPeek {
+    const cached = this.lazyCache.get(cacheKey);
+    if (cached) return { status: "ready", component: cached };
+    if (this.lazyInflight.has(cacheKey)) return { status: "loading" };
+    if (this.lazyErrors.has(cacheKey)) {
+      return { status: "error", error: this.lazyErrors.get(cacheKey) };
+    }
+    return { status: "idle" };
+  }
+
+  /**
+   * Start a lazy import if needed. Does not retry a stored error
+   * (the outlet keeps showing the error UI until navigation or prefetch).
+   */
+  ensureLazy(cacheKey: string, loader: LazyComponent): void {
+    const state = this.peekLazy(cacheKey);
+    if (state.status !== "idle") return;
+    this.startLazyLoad(cacheKey, loader);
+  }
+
+  private startLazyLoad(
+    cacheKey: string,
+    loader: LazyComponent,
+  ): Promise<SinwanComponent> {
+    this.lazyErrors.delete(cacheKey);
+    const pending = loader()
+      .then((mod) => {
+        this.lazyCache.set(cacheKey, mod.default);
+        this.lazyErrors.delete(cacheKey);
+        this.bumpLazyTick();
+        return mod.default;
+      })
+      .catch((err: unknown) => {
+        this.lazyErrors.set(cacheKey, err);
+        this.bumpLazyTick();
+        throw err;
+      })
+      .finally(() => {
+        this.lazyInflight.delete(cacheKey);
+      });
+    this.lazyInflight.set(cacheKey, pending);
+    pending.catch(() => {
+      /* prefetch / outlet consume errors via peekLazy */
+    });
+    return pending;
+  }
+
   /** Current URL path (reactive). */
   get path(): string {
     return this._path.value;
@@ -191,7 +267,7 @@ export class Router {
     this._searchParams.value = extractSearchParams(to);
   }
 
-  /** Prefetch a route's lazy component. */
+  /** Prefetch a route's lazy component into this router's cache. */
   prefetch(path: string): void {
     if (typeof window === "undefined") return;
 
@@ -204,37 +280,31 @@ export class Router {
     if (!isLazyComponent(route.component)) return;
 
     const cacheKey = leaf.fullPattern;
-    if (!lazyCache.has(cacheKey)) {
-      route.component().then((mod) => {
-        if (!lazyCache.has(cacheKey)) {
-          lazyCache.set(cacheKey, mod.default);
-        }
-      });
-    }
+    const state = this.peekLazy(cacheKey);
+    if (state.status === "ready" || state.status === "loading") return;
+    this.startLazyLoad(cacheKey, route.component);
   }
 
-  /** Resolve a lazy component, using cache if available. */
+  /** Resolve a lazy component, using this instance's cache if available. */
   async resolveComponent(
     route: RouteDefinition,
-  ): Promise<import("sinwan/component").SinwanComponent<any>> {
+  ): Promise<SinwanComponent> {
     if (!isLazyComponent(route.component)) {
       return route.component;
     }
 
-    const cacheKey = this.routeList.includes(route)
-      ? (this.findFullPattern(route) ?? route.path)
-      : route.path;
-    const cached = lazyCache.get(cacheKey);
+    const cacheKey = this.findFullPattern(route) ?? route.path;
+    const cached = this.lazyCache.get(cacheKey);
     if (cached) return cached;
 
-    const mod = await route.component();
-    lazyCache.set(cacheKey, mod.default);
-    return mod.default;
+    const inflight = this.lazyInflight.get(cacheKey);
+    if (inflight) return inflight;
+
+    return this.startLazyLoad(cacheKey, route.component);
   }
 
   /** Find the full pattern for a route. */
   private findFullPattern(route: RouteDefinition): string | undefined {
-    // Search the tree for this route
     return this.searchForRoute(this.tree, route, "");
   }
 
@@ -259,12 +329,15 @@ export class Router {
     return undefined;
   }
 
-  /** Clean up event listeners. */
+  /** Clean up event listeners and drop this instance's lazy cache. */
   dispose(): void {
     if (this.popstateHandler && typeof window !== "undefined") {
       window.removeEventListener("popstate", this.popstateHandler);
       this.popstateHandler = null;
     }
+    this.lazyCache.clear();
+    this.lazyErrors.clear();
+    this.lazyInflight.clear();
   }
 }
 

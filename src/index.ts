@@ -5,7 +5,7 @@
  *
  * @example
  * ```tsx
- * import { createRouter, RouterProvider, RouterOutlet, Link } from "sinwan-router";
+ * import { createRouter, RouterKey, RouterOutlet, Link } from "sinwan-router";
  * import { cc, provide } from "sinwan/component";
  *
  * const router = createRouter([
@@ -30,7 +30,7 @@
  */
 
 // Core router
-export { createRouter, Router, isLazyComponent } from "./router.ts";
+export { createRouter, Router, isLazyComponent, lazy } from "./router.ts";
 
 // Path matching utilities (radix tree based)
 export {
@@ -50,6 +50,8 @@ export type {
   NavLinkProps,
   RouterOutletProps,
 } from "./components.tsx";
+export { Route, Routes, collectRouteDefinitions, isRouteElement } from "./jsx-routes.tsx";
+export type { RouteProps, RoutesProps } from "./jsx-routes.tsx";
 
 // Hooks
 export {
@@ -70,4 +72,5 @@ export type {
   MatchedRoute,
   NavigateOptions,
   RouterContextValue,
+  LazyPeek,
 } from "./types.ts";

@@ -1,390 +1,382 @@
 import { describe, expect, test } from "bun:test";
 import { createRouter } from "../src/router.ts";
+import { Link, NavLink, RouterOutlet } from "../src/components.tsx";
 import {
-  createLink,
-  createNavLink,
-  createRouterOutlet,
-} from "../src/components.tsx";
-import { cc } from "sinwan/component";
-
-// ─── Test components ───────────────────────────────────────
-
-const Home = cc(() => <div>Home</div>);
-const About = cc(() => <div>About</div>);
-const UserProfile = cc<{ id: string }>(({ id }) => <div>User {id}</div>);
-
-const LazyAbout = () => Promise.resolve({ default: About });
+  About,
+  Failed,
+  Home,
+  Loading,
+  NotFound,
+  asKey,
+  asVNode,
+  fakeClick,
+  setupWindow,
+  teardownWindow,
+  waitForLazyStatus,
+  withRouter,
+} from "./helpers.tsx";
+import type { LinkClickEvent } from "../src/link-nav.ts";
 
 const routes = [
   { path: "/", component: Home },
   { path: "/about", component: About },
-  { path: "/users/:id", component: UserProfile },
-  { path: "/lazy", component: LazyAbout },
+  { path: "/users/:id", component: Home },
 ];
 
-// ─── Helpers ───────────────────────────────────────────────
-
-/** Extract props from a rendered vdom node. */
-function getProps(result: any): Record<string, any> {
-  return result.props ?? {};
+function clickHandler(
+  node: { props: Record<string, unknown> },
+): (event: LinkClickEvent) => void {
+  const handler = node.props.onclick;
+  if (typeof handler !== "function") {
+    throw new Error("expected onclick");
+  }
+  return handler as (event: LinkClickEvent) => void;
 }
 
-/** Create a fake click event. */
-function fakeClick(overrides: Partial<MouseEvent> = {}): MouseEvent {
-  return {
-    ctrlKey: false,
-    metaKey: false,
-    shiftKey: false,
-    button: 0,
-    preventDefault: () => {},
-    ...overrides,
-  } as unknown as MouseEvent;
+function mouseEnterHandler(
+  node: { props: Record<string, unknown> },
+): () => void {
+  const handler = node.props.onmouseenter;
+  if (typeof handler !== "function") {
+    throw new Error("expected onmouseenter");
+  }
+  return handler as () => void;
 }
 
-// ─── Link tests ────────────────────────────────────────────
+function classGetter(node: { props: Record<string, unknown> }): () => string {
+  const value = node.props.class;
+  if (typeof value !== "function") {
+    throw new Error("expected class getter");
+  }
+  return value as () => string;
+}
 
-describe("createLink", () => {
-  test("creates a Link component", () => {
+describe("Link", () => {
+  test("renders an anchor with href and class", () => {
     const router = createRouter(routes, "/");
-    const Link = createLink(router);
-    expect(typeof Link).toBe("function");
-    expect((Link as any)._SinwanComponent).toBe(true);
-  });
-
-  test("Link renders an anchor with href", () => {
-    const router = createRouter(routes, "/");
-    const Link = createLink(router);
-    const result = Link({ href: "/about", children: "About" }) as any;
+    const result = asVNode(
+      withRouter(router, () =>
+        Link({ href: "/about", class: "nav-link", children: "About" }),
+      ),
+    );
     expect(result.tag).toBe("a");
-    expect(getProps(result).href).toBe("/about");
+    expect(result.props.href).toBe("/about");
+    expect(result.props.class).toBe("nav-link");
   });
 
-  test("Link click navigates to href", () => {
+  test("does not navigate when defaultPrevented is already true", () => {
     const router = createRouter(routes, "/");
-    const Link = createLink(router);
-    const result = Link({ href: "/about", children: "About" }) as any;
-    const onclick = getProps(result).onclick;
-    onclick(fakeClick());
-    expect(router.path).toBe("/about");
+    const result = asVNode(
+      withRouter(router, () => Link({ href: "/about", children: "About" })),
+    );
+    clickHandler(result)(fakeClick({ defaultPrevented: true }));
+    expect(router.path).toBe("/");
   });
 
-  test("Link click with ctrlKey does not navigate", () => {
+  test("does not navigate for modifier keys, middle click, or alt", () => {
     const router = createRouter(routes, "/");
-    const Link = createLink(router);
-    const result = Link({ href: "/about", children: "About" }) as any;
-    const onclick = getProps(result).onclick;
+    const result = asVNode(
+      withRouter(router, () => Link({ href: "/about", children: "About" })),
+    );
+    const onclick = clickHandler(result);
     onclick(fakeClick({ ctrlKey: true }));
-    expect(router.path).toBe("/");
-  });
-
-  test("Link click with metaKey does not navigate", () => {
-    const router = createRouter(routes, "/");
-    const Link = createLink(router);
-    const result = Link({ href: "/about", children: "About" }) as any;
-    const onclick = getProps(result).onclick;
     onclick(fakeClick({ metaKey: true }));
-    expect(router.path).toBe("/");
-  });
-
-  test("Link click with shiftKey does not navigate", () => {
-    const router = createRouter(routes, "/");
-    const Link = createLink(router);
-    const result = Link({ href: "/about", children: "About" }) as any;
-    const onclick = getProps(result).onclick;
     onclick(fakeClick({ shiftKey: true }));
-    expect(router.path).toBe("/");
-  });
-
-  test("Link click with button !== 0 does not navigate", () => {
-    const router = createRouter(routes, "/");
-    const Link = createLink(router);
-    const result = Link({ href: "/about", children: "About" }) as any;
-    const onclick = getProps(result).onclick;
+    onclick(fakeClick({ altKey: true }));
     onclick(fakeClick({ button: 1 }));
     expect(router.path).toBe("/");
   });
 
-  test("Link mouseenter with prefetch=true calls prefetch", () => {
+  test("click navigates to href", () => {
     const router = createRouter(routes, "/");
-    const prefetchSpy = router.prefetch.bind(router);
-    let called = false;
-    router.prefetch = (path: string) => {
-      called = true;
-      prefetchSpy(path);
-    };
-    const Link = createLink(router);
-    const result = Link({
-      href: "/about",
-      prefetch: true,
-      children: "About",
-    }) as any;
-    const onmouseenter = getProps(result).onmouseenter;
-    onmouseenter();
-    expect(called).toBe(true);
-  });
-
-  test("Link mouseenter with prefetch=false does not call prefetch", () => {
-    const router = createRouter(routes, "/");
-    let called = false;
-    router.prefetch = () => {
-      called = true;
-    };
-    const Link = createLink(router);
-    const result = Link({
-      href: "/about",
-      prefetch: false,
-      children: "About",
-    }) as any;
-    const onmouseenter = getProps(result).onmouseenter;
-    onmouseenter();
-    expect(called).toBe(false);
-  });
-
-  test("Link with class prop", () => {
-    const router = createRouter(routes, "/");
-    const Link = createLink(router);
-    const result = Link({
-      href: "/about",
-      class: "nav-link",
-      children: "About",
-    }) as any;
-    expect(getProps(result).class).toBe("nav-link");
-  });
-});
-
-// ─── NavLink tests ─────────────────────────────────────────
-
-describe("createNavLink", () => {
-  test("creates a NavLink component", () => {
-    const router = createRouter(routes, "/");
-    const NavLink = createNavLink(router);
-    expect(typeof NavLink).toBe("function");
-    expect((NavLink as any)._SinwanComponent).toBe(true);
-  });
-
-  test("NavLink click navigates to href", () => {
-    const router = createRouter(routes, "/");
-    const NavLink = createNavLink(router);
-    const result = NavLink({ href: "/about", children: "About" }) as any;
-    const onclick = getProps(result).onclick;
-    onclick(fakeClick());
+    const result = asVNode(
+      withRouter(router, () => Link({ href: "/about", children: "About" })),
+    );
+    clickHandler(result)(fakeClick());
     expect(router.path).toBe("/about");
   });
 
-  test("NavLink click with ctrlKey does not navigate", () => {
+  test("does not intercept target=_blank, download, or external hrefs", () => {
     const router = createRouter(routes, "/");
-    const NavLink = createNavLink(router);
-    const result = NavLink({ href: "/about", children: "About" }) as any;
-    const onclick = getProps(result).onclick;
-    onclick(fakeClick({ ctrlKey: true }));
+    withRouter(router, () => {
+      clickHandler(
+        asVNode(Link({ href: "/about", target: "_blank", children: "x" })),
+      )(fakeClick());
+      clickHandler(
+        asVNode(Link({ href: "/about", download: true, children: "x" })),
+      )(fakeClick());
+      const named = asVNode(
+        Link({
+          href: "/about",
+          download: "a.txt",
+          rel: "noreferrer",
+          children: "x",
+        }),
+      );
+      expect(named.props.download).toBe("a.txt");
+      expect(named.props.rel).toBe("noreferrer");
+      clickHandler(named)(fakeClick());
+      clickHandler(
+        asVNode(Link({ href: "https://example.com", children: "x" })),
+      )(fakeClick());
+    });
     expect(router.path).toBe("/");
   });
 
-  test("NavLink click with metaKey does not navigate", () => {
+  test("omits the download attribute when download is false", () => {
     const router = createRouter(routes, "/");
-    const NavLink = createNavLink(router);
-    const result = NavLink({ href: "/about", children: "About" }) as any;
-    const onclick = getProps(result).onclick;
-    onclick(fakeClick({ metaKey: true }));
-    expect(router.path).toBe("/");
+    const result = asVNode(
+      withRouter(router, () =>
+        Link({ href: "/file", download: false, children: "x" }),
+      ),
+    );
+    expect(result.props.download).toBeUndefined();
   });
 
-  test("NavLink click with shiftKey does not navigate", () => {
+  test("passes download=true as an empty string attribute", () => {
     const router = createRouter(routes, "/");
-    const NavLink = createNavLink(router);
-    const result = NavLink({ href: "/about", children: "About" }) as any;
-    const onclick = getProps(result).onclick;
-    onclick(fakeClick({ shiftKey: true }));
-    expect(router.path).toBe("/");
+    const result = asVNode(
+      withRouter(router, () =>
+        Link({ href: "/file", download: true, children: "x" }),
+      ),
+    );
+    expect(result.props.download).toBe("");
   });
 
-  test("NavLink click with button !== 0 does not navigate", () => {
-    const router = createRouter(routes, "/");
-    const NavLink = createNavLink(router);
-    const result = NavLink({ href: "/about", children: "About" }) as any;
-    const onclick = getProps(result).onclick;
-    onclick(fakeClick({ button: 2 }));
-    expect(router.path).toBe("/");
-  });
+  test("mouseenter prefetches when enabled and skips when disabled", () => {
+    setupWindow();
+    try {
+      const router = createRouter(
+        [{ path: "/about", component: () => Promise.resolve({ default: About }) }],
+        "/",
+      );
+      const on = asVNode(
+        withRouter(router, () =>
+          Link({ href: "/about", prefetch: true, children: "x" }),
+        ),
+      );
+      mouseEnterHandler(on)();
+      expect(
+        router.peekLazy("/about").status === "loading" ||
+          router.peekLazy("/about").status === "ready",
+      ).toBe(true);
 
-  test("NavLink mouseenter with prefetch=true calls prefetch", () => {
-    const router = createRouter(routes, "/");
-    const prefetchSpy = router.prefetch.bind(router);
-    let called = false;
-    router.prefetch = (path: string) => {
-      called = true;
-      prefetchSpy(path);
-    };
-    const NavLink = createNavLink(router);
-    const result = NavLink({
-      href: "/about",
-      prefetch: true,
-      children: "About",
-    }) as any;
-    const onmouseenter = getProps(result).onmouseenter;
-    onmouseenter();
-    expect(called).toBe(true);
-  });
-
-  test("NavLink mouseenter with prefetch=false does not call prefetch", () => {
-    const router = createRouter(routes, "/");
-    let called = false;
-    router.prefetch = () => {
-      called = true;
-    };
-    const NavLink = createNavLink(router);
-    const result = NavLink({
-      href: "/about",
-      prefetch: false,
-      children: "About",
-    }) as any;
-    const onmouseenter = getProps(result).onmouseenter;
-    onmouseenter();
-    expect(called).toBe(false);
-  });
-
-  test("NavLink active class when path matches exactly", () => {
-    const router = createRouter(routes, "/about");
-    const NavLink = createNavLink(router);
-    const result = NavLink({
-      href: "/about",
-      activeClass: "active",
-      children: "About",
-    }) as any;
-    // The class prop is a function (reactive) — call it to get the value
-    const classProp = getProps(result).class;
-    const cls = typeof classProp === "function" ? classProp() : classProp;
-    expect(cls).toContain("active");
-  });
-
-  test("NavLink active class when path is nested under href", () => {
-    const router = createRouter(routes, "/users/42");
-    const NavLink = createNavLink(router);
-    const result = NavLink({
-      href: "/users",
-      activeClass: "active",
-      children: "Users",
-    }) as any;
-    const classProp = getProps(result).class;
-    const cls = typeof classProp === "function" ? classProp() : classProp;
-    expect(cls).toContain("active");
-  });
-
-  test("NavLink no active class when path doesn't match", () => {
-    const router = createRouter(routes, "/");
-    const NavLink = createNavLink(router);
-    const result = NavLink({
-      href: "/about",
-      activeClass: "active",
-      children: "About",
-    }) as any;
-    const classProp = getProps(result).class;
-    const cls = typeof classProp === "function" ? classProp() : classProp;
-    expect(cls).toBe("");
-  });
-
-  test("NavLink with custom activeClass", () => {
-    const router = createRouter(routes, "/about");
-    const NavLink = createNavLink(router);
-    const result = NavLink({
-      href: "/about",
-      activeClass: "current",
-      children: "About",
-    }) as any;
-    const classProp = getProps(result).class;
-    const cls = typeof classProp === "function" ? classProp() : classProp;
-    expect(cls).toContain("current");
-  });
-
-  test("NavLink with class and activeClass combined", () => {
-    const router = createRouter(routes, "/about");
-    const NavLink = createNavLink(router);
-    const result = NavLink({
-      href: "/about",
-      class: "nav-link",
-      activeClass: "active",
-      children: "About",
-    }) as any;
-    const classProp = getProps(result).class;
-    const cls = typeof classProp === "function" ? classProp() : classProp;
-    expect(cls).toContain("nav-link");
-    expect(cls).toContain("active");
+      let called = false;
+      router.prefetch = () => {
+        called = true;
+      };
+      const off = asVNode(
+        withRouter(router, () =>
+          Link({ href: "/about", prefetch: false, children: "x" }),
+        ),
+      );
+      mouseEnterHandler(off)();
+      expect(called).toBe(false);
+    } finally {
+      teardownWindow();
+    }
   });
 });
 
-// ─── RouterOutlet tests ────────────────────────────────────
+describe("NavLink", () => {
+  test("applies the active class for exact and nested paths", () => {
+    const exact = asVNode(
+      withRouter(createRouter(routes, "/about"), () =>
+        NavLink({
+          href: "/about",
+          activeClass: "current",
+          class: "nav",
+          children: "About",
+        }),
+      ),
+    );
+    expect(classGetter(exact)()).toContain("current");
+    expect(classGetter(exact)()).toContain("nav");
 
-describe("createRouterOutlet", () => {
-  test("creates a RouterOutlet component", () => {
+    const nested = asVNode(
+      withRouter(createRouter(routes, "/users/42"), () =>
+        NavLink({ href: "/users", children: "Users" }),
+      ),
+    );
+    expect(classGetter(nested)()).toContain("active");
+
+    const idle = asVNode(
+      withRouter(createRouter(routes, "/"), () =>
+        NavLink({ href: "/about", children: "About" }),
+      ),
+    );
+    expect(classGetter(idle)()).toBe("");
+  });
+
+  test("click and prefetch behave like Link", () => {
     const router = createRouter(routes, "/");
-    const RouterOutlet = createRouterOutlet(router);
-    expect(typeof RouterOutlet).toBe("function");
-    expect((RouterOutlet as any)._SinwanComponent).toBe(true);
-  });
+    const node = asVNode(
+      withRouter(router, () => NavLink({ href: "/about", children: "About" })),
+    );
+    clickHandler(node)(fakeClick({ ctrlKey: true }));
+    expect(router.path).toBe("/");
+    clickHandler(node)(fakeClick());
+    expect(router.path).toBe("/about");
 
-  test("RouterOutlet renders matched route component (static)", () => {
+    setupWindow();
+    try {
+      const lazyRouter = createRouter(
+        [{ path: "/about", component: () => Promise.resolve({ default: About }) }],
+        "/",
+      );
+      const hover = asVNode(
+        withRouter(lazyRouter, () =>
+          NavLink({ href: "/about", prefetch: true, children: "x" }),
+        ),
+      );
+      mouseEnterHandler(hover)();
+      expect(
+        lazyRouter.peekLazy("/about").status === "loading" ||
+          lazyRouter.peekLazy("/about").status === "ready",
+      ).toBe(true);
+    } finally {
+      teardownWindow();
+    }
+
+    setupWindow();
+    try {
+      const lazyRouter = createRouter(
+        [{ path: "/about", component: () => Promise.resolve({ default: About }) }],
+        "/",
+      );
+      const off = asVNode(
+        withRouter(lazyRouter, () =>
+          NavLink({
+            href: "/about",
+            prefetch: false,
+            target: "_blank",
+            children: "x",
+          }),
+        ),
+      );
+      mouseEnterHandler(off)();
+      clickHandler(off)(fakeClick());
+      expect(lazyRouter.peekLazy("/about").status).toBe("idle");
+      expect(lazyRouter.path).toBe("/");
+    } finally {
+      teardownWindow();
+    }
+  });
+});
+
+describe("RouterOutlet", () => {
+  test("renders a Key block whose when() tracks the route identity", () => {
     const router = createRouter(routes, "/");
-    const RouterOutlet = createRouterOutlet(router);
-    const result = RouterOutlet({}) as any;
-    // RouterOutlet now returns a Show element (reactive control flow)
-    expect(result).toBeDefined();
-    expect(result.tag).toBeDefined();
+    const node = asKey(withRouter(router, () => RouterOutlet({})));
+    expect(node.props.when()).toContain("/");
   });
 
-  test("RouterOutlet renders with fallback prop", () => {
+  test("renders the matched static component", () => {
     const router = createRouter(routes, "/");
-    const Fallback = cc(() => <div>Loading...</div>);
-    const RouterOutlet = createRouterOutlet(router);
-    const result = RouterOutlet({ fallback: Fallback }) as any;
-    expect(result).toBeDefined();
+    const child = withRouter(router, () => asKey(RouterOutlet({})).props.children());
+    expect(child?.tag).toBe(Home);
+    if (child && typeof child.tag === "function") {
+      (child.tag as () => unknown)();
+    }
   });
 
-  test("RouterOutlet renders notFound when no route matches", () => {
-    const router = createRouter(routes, "/nonexistent");
-    const NotFound = cc(() => <div>404</div>);
-    const RouterOutlet = createRouterOutlet(router);
-    const result = RouterOutlet({ notFound: NotFound }) as any;
-    // Outer Show's fallback should contain the NotFound component
-    expect(result).toBeDefined();
-    expect(result.props).toBeDefined();
-    expect(result.props.fallback).toBeDefined();
+  test("renders notFound and the default 404", () => {
+    const router = createRouter(routes, "/missing");
+    const custom = withRouter(router, () =>
+      asKey(RouterOutlet({ notFound: NotFound })).props.children(),
+    );
+    expect(custom?.tag).toBe(NotFound);
+    if (custom && typeof custom.tag === "function") {
+      (custom.tag as () => unknown)();
+    }
+
+    const fallback404 = withRouter(router, () =>
+      asKey(RouterOutlet({})).props.children(),
+    );
+    expect(fallback404?.tag).toBeDefined();
+    if (fallback404 && typeof fallback404.tag === "function") {
+      (fallback404.tag as () => unknown)();
+    }
   });
 
-  test("RouterOutlet renders default 404 when no match and no notFound prop", () => {
-    const router = createRouter(routes, "/nonexistent");
-    const RouterOutlet = createRouterOutlet(router);
-    const result = RouterOutlet({}) as any;
-    // Outer Show's fallback should be a div with "404" text
-    expect(result).toBeDefined();
-    expect(result.props.fallback).toBeDefined();
+  test("nested outlets render nothing when depth has no match", () => {
+    const router = createRouter(routes, "/");
+    const child = withRouter(router, () =>
+      asKey(RouterOutlet({ depth: 1 })).props.children(),
+    );
+    expect(child).toBeNull();
   });
 
-  test("RouterOutlet renders default loading when lazy and no fallback", () => {
-    const router = createRouter(routes, "/lazy");
-    const RouterOutlet = createRouterOutlet(router);
-    const result = RouterOutlet({}) as any;
-    // The outer Show is for not-found, inner Show for loading state
-    expect(result).toBeDefined();
-    expect(result.props).toBeDefined();
+  test("shows fallback while lazy, then the loaded component after ensureLazy", async () => {
+    const loader = () => Promise.resolve({ default: About });
+    const router = createRouter([{ path: "/lazy", component: loader }], "/lazy");
+    const loading = withRouter(router, () =>
+      asKey(RouterOutlet({ fallback: Loading })).props.children(),
+    );
+    expect(loading?.tag).toBe(Loading);
+
+    await router.resolveComponent(router.routes[0]!);
+    const ready = withRouter(router, () =>
+      asKey(RouterOutlet({ fallback: Loading })).props.children(),
+    );
+    expect(ready?.tag).toBe(About);
   });
 
-  test("RouterOutlet renders fallback while loading lazy route", () => {
-    const router = createRouter(routes, "/lazy");
-    const Fallback = cc(() => <div>Loading...</div>);
-    const RouterOutlet = createRouterOutlet(router);
-    const result = RouterOutlet({ fallback: Fallback }) as any;
-    expect(result).toBeDefined();
-    // The inner Show's fallback should contain the Fallback component
-    // The children prop contains the inner Show
-    expect(result.props.children).toBeDefined();
+  test("shows default loading when lazy and no fallback is passed", () => {
+    const router = createRouter(
+      [{ path: "/lazy", component: () => Promise.resolve({ default: About }) }],
+      "/lazy",
+    );
+    const loading = withRouter(router, () =>
+      asKey(RouterOutlet({})).props.children(),
+    );
+    expect(loading?.tag).toBeDefined();
+    if (loading && typeof loading.tag === "function") {
+      (loading.tag as () => unknown)();
+    }
   });
 
-  test("RouterOutlet renders resolved component after lazy load", async () => {
-    const router = createRouter(routes, "/lazy");
-    const RouterOutlet = createRouterOutlet(router);
-    const result = RouterOutlet({}) as any;
-    // Wait for the lazy component to resolve
-    await new Promise((resolve) => setTimeout(resolve, 10));
-    expect(result).toBeDefined();
+  test("shows error UI when the lazy import rejects", async () => {
+    const boom = () => Promise.reject(new Error("load-fail"));
+    const router = createRouter([{ path: "/boom", component: boom }], "/boom");
+    withRouter(router, () => asKey(RouterOutlet({ error: Failed })).props.children());
+    await waitForLazyStatus(router, "/boom", "error");
+    const errNode = withRouter(router, () =>
+      asKey(RouterOutlet({ error: Failed })).props.children(),
+    );
+    expect(errNode?.tag).toBe(Failed);
+    if (errNode && typeof errNode.tag === "function") {
+      (errNode.tag as (props: { error?: unknown }) => unknown)({
+        error: new Error("load-fail"),
+      });
+    }
+
+    const defaultErr = withRouter(router, () =>
+      asKey(RouterOutlet({})).props.children(),
+    );
+    expect(defaultErr?.tag).toBeDefined();
+    if (defaultErr && typeof defaultErr.tag === "function") {
+      (defaultErr.tag as (props: { error?: unknown }) => unknown)({
+        error: new Error("load-fail"),
+      });
+    }
+  });
+
+  test("prefetch fills the same cache the outlet reads", async () => {
+    setupWindow();
+    try {
+      const loader = () => Promise.resolve({ default: About });
+      const router = createRouter([{ path: "/lazy", component: loader }], "/");
+      router.prefetch("/lazy");
+      await Promise.resolve();
+      await Promise.resolve();
+      router.navigate("/lazy");
+      const ready = withRouter(router, () =>
+        asKey(RouterOutlet({ fallback: Loading })).props.children(),
+      );
+      expect(ready?.tag).toBe(About);
+    } finally {
+      teardownWindow();
+    }
   });
 });

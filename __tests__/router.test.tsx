@@ -1,13 +1,14 @@
-import { describe, expect, test, beforeEach, afterEach } from "bun:test";
-import { createRouter, Router, isLazyComponent } from "../src/router.ts";
+import { describe, expect, test } from "bun:test";
+import { createRouter, Router, isLazyComponent, lazy } from "../src/router.ts";
 import type { RouteDefinition } from "../src/types.ts";
 import { cc } from "sinwan/component";
+import { waitForLazyStatus } from "./helpers.tsx";
 
 // ─── Test components ───────────────────────────────────────
 
 const Home = cc(() => <div>Home</div>);
 const About = cc(() => <div>About</div>);
-const UserProfile = cc<{ id: string }>(({ id }) => <div>User {id}</div>);
+const UserProfile = cc(() => <div>User</div>);
 
 const lazyComponent = () => Promise.resolve({ default: About });
 const staticComponent = Home;
@@ -47,12 +48,30 @@ function teardownWindow() {
 // ─── Tests ─────────────────────────────────────────────────
 
 describe("isLazyComponent", () => {
-  test("returns true for lazy components (function without _SinwanComponent)", () => {
+  test("returns true for zero-arg import factories", () => {
     expect(isLazyComponent(lazyComponent)).toBe(true);
   });
 
-  test("returns false for static components (cc components)", () => {
+  test("returns true for lazy() branded factories", () => {
+    const branded = lazy(() => Promise.resolve({ default: About }));
+    expect(isLazyComponent(branded)).toBe(true);
+  });
+
+  test("returns true when _SinwanLazy is set even if the function takes args", () => {
+    const weird = Object.assign(
+      (_unused: unknown) => Promise.resolve({ default: About }),
+      { _SinwanLazy: true as const },
+    );
+    expect(isLazyComponent(weird)).toBe(true);
+  });
+
+  test("returns false for static cc components", () => {
     expect(isLazyComponent(staticComponent)).toBe(false);
+  });
+
+  test("returns false for functions that take props", () => {
+    const plain = (_props: { id: string }) => Home;
+    expect(isLazyComponent(plain)).toBe(false);
   });
 
   test("returns false for non-function values", () => {
@@ -419,6 +438,172 @@ describe("createRouter factory", () => {
     expect(router.path).toBe("/");
   });
 });
+
+describe("Router — instance lazy cache", () => {
+  test("prefetch and resolveComponent share this router's cache, not another instance", async () => {
+    setupWindow();
+    try {
+      const loader = () => Promise.resolve({ default: About });
+      const a = new Router([{ path: "/lazy", component: loader }], "/");
+      const b = new Router([{ path: "/lazy", component: loader }], "/");
+      a.prefetch("/lazy");
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(a.peekLazy("/lazy").status).toBe("ready");
+      expect(b.peekLazy("/lazy").status).toBe("idle");
+      const comp = await a.resolveComponent(a.routes[0]!);
+      expect(comp).toBe(About);
+    } finally {
+      teardownWindow();
+    }
+  });
+
+  test("dispose clears the lazy cache", async () => {
+    setupWindow();
+    try {
+      const loader = () => Promise.resolve({ default: About });
+      const router = new Router([{ path: "/lazy", component: loader }], "/");
+      router.prefetch("/lazy");
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(router.peekLazy("/lazy").status).toBe("ready");
+      router.dispose();
+      expect(router.peekLazy("/lazy").status).toBe("idle");
+    } finally {
+      teardownWindow();
+    }
+  });
+
+  test("ensureLazy is a no-op while loading, ready, or in error", async () => {
+    let resolveMod: ((value: { default: typeof About }) => void) | undefined;
+    const loader = () =>
+      new Promise<{ default: typeof About }>((resolve) => {
+        resolveMod = resolve;
+      });
+    const router = new Router([{ path: "/lazy", component: loader }], "/lazy");
+    router.ensureLazy("/lazy", loader);
+    router.ensureLazy("/lazy", loader);
+    expect(router.peekLazy("/lazy").status).toBe("loading");
+    resolveMod!({ default: About });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(router.peekLazy("/lazy").status).toBe("ready");
+    router.ensureLazy("/lazy", loader);
+    expect(router.peekLazy("/lazy").status).toBe("ready");
+  });
+
+  test("failed lazy loads surface as error and do not auto-retry from ensureLazy", async () => {
+    const boom = () => Promise.reject(new Error("nope"));
+    const router = new Router([{ path: "/boom", component: boom }], "/boom");
+    router.ensureLazy("/boom", boom);
+    await waitForLazyStatus(router, "/boom", "error");
+    router.ensureLazy("/boom", boom);
+    expect(router.peekLazy("/boom").status).toBe("error");
+  });
+
+  test("prefetch retries after an error", async () => {
+    setupWindow();
+    try {
+      let n = 0;
+      const flaky = () => {
+        n += 1;
+        if (n === 1) return Promise.reject(new Error("once"));
+        return Promise.resolve({ default: About });
+      };
+      const router = new Router([{ path: "/flaky", component: flaky }], "/");
+      router.prefetch("/flaky");
+      await waitForLazyStatus(router, "/flaky", "error");
+      router.prefetch("/flaky");
+      await waitForLazyStatus(router, "/flaky", "ready");
+    } finally {
+      teardownWindow();
+    }
+  });
+
+  test("prefetch skips when already ready", async () => {
+    setupWindow();
+    try {
+      let calls = 0;
+      const loader = () => {
+        calls += 1;
+        return Promise.resolve({ default: About });
+      };
+      const router = new Router([{ path: "/lazy", component: loader }], "/");
+      router.prefetch("/lazy");
+      await Promise.resolve();
+      await Promise.resolve();
+      router.prefetch("/lazy");
+      expect(calls).toBe(1);
+    } finally {
+      teardownWindow();
+    }
+  });
+
+  test("resolveComponent uses the tree pattern, then falls back to route.path", async () => {
+    const nested = lazy(() => Promise.resolve({ default: About }));
+    const router = new Router(
+      [
+        {
+          path: "/users",
+          component: Home,
+          children: [{ path: ":id", component: nested }],
+        },
+      ],
+      "/",
+    );
+    const child = router.routes[1]!;
+    const fromTree = await router.resolveComponent(child);
+    expect(fromTree).toBe(About);
+
+    const orphan = {
+      path: "/orphan",
+      component: lazy(() => Promise.resolve({ default: Home })),
+    };
+    const fromPath = await router.resolveComponent(orphan);
+    expect(fromPath).toBe(Home);
+  });
+
+  test("resolveComponent walks wildcard nodes", async () => {
+    const files = lazy(() => Promise.resolve({ default: About }));
+    const router = new Router([{ path: "/files/*path", component: files }], "/");
+    const comp = await router.resolveComponent(router.routes[0]!);
+    expect(comp).toBe(About);
+  });
+
+  test("awaiting an in-flight resolveComponent reuses the same promise", async () => {
+    let resolveMod: ((value: { default: typeof About }) => void) | undefined;
+    const loader = () =>
+      new Promise<{ default: typeof About }>((resolve) => {
+        resolveMod = resolve;
+      });
+    const router = new Router([{ path: "/lazy", component: loader }], "/");
+    const first = router.resolveComponent(router.routes[0]!);
+    const second = router.resolveComponent(router.routes[0]!);
+    resolveMod!({ default: About });
+    expect(await first).toBe(About);
+    expect(await second).toBe(About);
+  });
+
+  test("nested index child joins to the parent path", () => {
+    const router = new Router(
+      [
+        {
+          path: "/app",
+          component: Home,
+          children: [{ path: "/", component: About }],
+        },
+      ],
+      "/app",
+    );
+    expect(router.matched?.route.component).toBe(About);
+  });
+
+  test("inserts a path without a leading slash", () => {
+    const router = new Router([{ path: "bare", component: Home }], "/bare");
+    expect(router.matched?.route.path).toBe("bare");
+  });
+});
+
 
 const routes: RouteDefinition[] = [
   { path: "/", component: Home },
