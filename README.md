@@ -96,24 +96,22 @@ There is no `RouterProvider` component. Provide the instance with `provide(Route
 import { Routes, Route, Link } from "sinwan-router";
 
 const App = cc(() => (
-  <div>
+  <Routes>
     <nav>
       <Link href="/">Home</Link>
       <Link href="/users/1">Profile</Link>
     </nav>
-    <Routes>
-      <Route path="/" component={Home} />
-      <Route path="/users/:id" component={UserProfile} />
-      <Route path="/app" component={AppLayout} meta={{ title: "App" }}>
-        <Route path="/" component={AppIndex} />
-        <Route path="settings" component={Settings} />
-      </Route>
-    </Routes>
-  </div>
+    <Route path="/" component={Home} />
+    <Route path="/users/:id" component={UserProfile} />
+    <Route path="/app" component={AppLayout} meta={{ title: "App" }}>
+      <Route path="/" component={AppIndex} />
+      <Route path="settings" component={Settings} />
+    </Route>
+  </Routes>
 ));
 ```
 
-`Routes` creates the router from those children, provides `RouterKey`, and renders a `<RouterOutlet />`. You can still pass `fallback`, `notFound`, `error`, and `initialPath`.
+`Routes` collects `<Route>` children into a router, provides `RouterKey` to layout siblings (`Link`, `NavLink`), and renders a `<RouterOutlet />`. Put links **inside** `<Routes>` — they need that context. You can still pass `fallback`, `notFound`, `error`, and `initialPath`.
 
 ## Routes
 

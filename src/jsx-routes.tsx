@@ -133,9 +133,20 @@ export function collectRouteDefinitions(children: unknown): RouteDefinition[] {
   return defs;
 }
 
+/** Non-route siblings (nav, layout) to render beside the outlet. */
+export function layoutNodes(children: unknown): SinwanNode[] {
+  const out: SinwanNode[] = [];
+  for (const node of flattenNodes(children)) {
+    if (isRouteElement(node) || isRouteDefinition(node)) continue;
+    out.push(node as SinwanNode);
+  }
+  return out;
+}
+
 /**
  * Declarative JSX router. Builds a `Router` from `<Route>` children
- * (same fields as `RouteDefinition`) and renders a `<RouterOutlet />`.
+ * (same fields as `RouteDefinition`), provides `RouterKey` to layout
+ * siblings such as `<NavLink>`, and renders a `<RouterOutlet />`.
  */
 export const Routes = cc<RoutesProps>(
   ({ children, fallback, notFound, error, initialPath }) => {
@@ -144,8 +155,16 @@ export const Routes = cc<RoutesProps>(
     onDispose(() => {
       router.dispose();
     });
-    return (
+    const outlet = (
       <RouterOutlet fallback={fallback} notFound={notFound} error={error} />
+    );
+    const layout = layoutNodes(children);
+    if (layout.length === 0) return outlet;
+    return (
+      <>
+        {layout}
+        {outlet}
+      </>
     );
   },
 );

@@ -12,6 +12,7 @@ describe("public API", () => {
     expect(typeof routerApi.Route).toBe("function");
     expect(typeof routerApi.Routes).toBe("function");
     expect(typeof routerApi.collectRouteDefinitions).toBe("function");
+    expect(typeof routerApi.layoutNodes).toBe("function");
     expect(typeof routerApi.isRouteElement).toBe("function");
     expect(typeof routerApi.useRouter).toBe("function");
     expect(typeof routerApi.RouterKey).toBe("symbol");

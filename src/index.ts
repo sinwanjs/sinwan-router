@@ -50,7 +50,13 @@ export type {
   NavLinkProps,
   RouterOutletProps,
 } from "./components.tsx";
-export { Route, Routes, collectRouteDefinitions, isRouteElement } from "./jsx-routes.tsx";
+export {
+  Route,
+  Routes,
+  collectRouteDefinitions,
+  isRouteElement,
+  layoutNodes,
+} from "./jsx-routes.tsx";
 export type { RouteProps, RoutesProps } from "./jsx-routes.tsx";
 
 // Hooks

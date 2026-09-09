@@ -11,6 +11,7 @@ import {
   Routes,
   collectRouteDefinitions,
   isRouteElement,
+  layoutNodes,
   ROUTE_TYPE,
 } from "../src/jsx-routes.tsx";
 import { RouterOutlet } from "../src/components.tsx";
@@ -197,6 +198,28 @@ describe("collectRouteDefinitions", () => {
   });
 });
 
+describe("layoutNodes", () => {
+  test("keeps layout siblings and drops route markers", () => {
+    const nav = <nav class="app-nav">links</nav>;
+    const nodes = layoutNodes(
+      <>
+        {nav}
+        <Route path="/" component={Home} />
+        {null}
+      </>,
+    );
+    expect(nodes).toHaveLength(1);
+    expect(asVNode(nodes[0]).tag).toBe("nav");
+  });
+
+  test("returns an empty list when only routes are present", () => {
+    expect(layoutNodes(<Route path="/" component={Home} />)).toEqual([]);
+    expect(
+      layoutNodes({ path: "/", component: Home } satisfies RouteDefinition),
+    ).toEqual([]);
+  });
+});
+
 describe("Routes", () => {
   test("provides a router and renders the matched route", () => {
     const child = withSetup(() => {
@@ -244,5 +267,30 @@ describe("Routes", () => {
     } finally {
       setCurrentInstance(prev);
     }
+  });
+
+  test("renders layout siblings and keeps the outlet", () => {
+    const tree = withSetup(() =>
+      Routes({
+        initialPath: "/",
+        children: (
+          <>
+            <nav class="app-nav">links</nav>
+            <Route path="/" component={Home} />
+          </>
+        ),
+      }),
+    );
+    const vnode = asVNode(tree);
+    expect(vnode.tag).toBe("");
+    const rawKids = [
+      ...((tree as { children?: unknown[] }).children ?? []),
+      vnode.props.children,
+    ].flat();
+    const tags = rawKids
+      .filter((node) => node != null && typeof node === "object")
+      .map((node) => asVNode(node).tag);
+    expect(tags).toContain("nav");
+    expect(tags).toContain(RouterOutlet);
   });
 });
