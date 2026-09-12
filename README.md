@@ -29,7 +29,7 @@ Sinwan Router matches paths with a radix tree (no regex compilation), keeps rout
 - **Lazy routes + prefetch** — `() => import("./Page")` or `lazy(...)`. `Link` prefetch and `RouterOutlet` share one per-router cache.
 - **Browser-safe links** — `Link` leaves `_blank`, `download`, modifier clicks (`ctrl` / `meta` / `shift` / `alt`), external URLs, and same-page hashes to the browser.
 
-Peer dependency: **sinwan >= 1.3.0** (`<Key>` remounts when `cache` is omitted).
+Peer dependency: **sinwan >= 1.3.3** (reactive native JSX attributes; `<Key>` remounts when `cache` is omitted).
 
 ## Install
 

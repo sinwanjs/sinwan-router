@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 import {
   isExternalHref,
   isHashOnlyHref,
-  jsxClass,
   shouldInterceptLinkClick,
 } from "../src/link-nav.ts";
 
@@ -103,10 +102,3 @@ describe("shouldInterceptLinkClick", () => {
   });
 });
 
-describe("jsxClass", () => {
-  test("returns the same getter instance for the JSX class slot", () => {
-    const getter = () => "active";
-    const result: unknown = jsxClass(getter);
-    expect(result).toBe(getter);
-  });
-});

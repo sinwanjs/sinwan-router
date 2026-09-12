@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { resolve } from "sinwan/reactivity";
 import { createRouter } from "../src/router.ts";
 import { Link, NavLink, RouterOutlet } from "../src/components.tsx";
 import {
@@ -43,12 +44,12 @@ function mouseEnterHandler(
   return handler as () => void;
 }
 
-function classGetter(node: { props: Record<string, unknown> }): () => string {
-  const value = node.props.class;
-  if (typeof value !== "function") {
-    throw new Error("expected class getter");
+function classOf(node: { props: Record<string, unknown> }): string {
+  const value = resolve(node.props.class);
+  if (typeof value !== "string") {
+    throw new Error("expected class string");
   }
-  return value as () => string;
+  return value;
 }
 
 describe("Link", () => {
@@ -190,22 +191,22 @@ describe("NavLink", () => {
         }),
       ),
     );
-    expect(classGetter(exact)()).toContain("current");
-    expect(classGetter(exact)()).toContain("nav");
+    expect(classOf(exact)).toContain("current");
+    expect(classOf(exact)).toContain("nav");
 
     const nested = asVNode(
       withRouter(createRouter(routes, "/users/42"), () =>
         NavLink({ href: "/users", children: "Users" }),
       ),
     );
-    expect(classGetter(nested)()).toContain("active");
+    expect(classOf(nested)).toContain("active");
 
     const idle = asVNode(
       withRouter(createRouter(routes, "/"), () =>
         NavLink({ href: "/about", children: "About" }),
       ),
     );
-    expect(classGetter(idle)()).toBe("");
+    expect(classOf(idle)).toBe("");
   });
 
   test("click and prefetch behave like Link", () => {

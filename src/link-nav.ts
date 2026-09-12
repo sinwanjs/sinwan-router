@@ -1,8 +1,6 @@
 /**
- * Link click interception and JSX class adapter.
+ * Link click interception.
  */
-
-import type { Reactive } from "sinwan/component";
 
 /** Fields read from a click event to decide client-side navigation. */
 export interface LinkClickEvent {
@@ -17,14 +15,6 @@ export interface LinkClickEvent {
 export interface LinkInterceptOptions {
   target?: string;
   download?: string | boolean;
-}
-
-/**
- * Sinwan JSX types `class` as `string`; the renderer accepts Reactive<string>.
- * Isolated here so call sites do not use `any`.
- */
-export function jsxClass(value: Reactive<string>): string {
-  return value as string;
 }
 
 /** True when the href should be left to the browser (other origin or scheme). */

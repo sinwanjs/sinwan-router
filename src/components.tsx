@@ -14,7 +14,6 @@ import { isLazyComponent } from "./router.ts";
 import type { Router } from "./router.ts";
 import type { MatchedRoute } from "./types.ts";
 import {
-  jsxClass,
   shouldInterceptLinkClick,
   type LinkInterceptOptions,
 } from "./link-nav.ts";
@@ -117,7 +116,7 @@ export const NavLink = cc<NavLinkProps>(
     return (
       <a
         href={href}
-        class={jsxClass(() => className.value)}
+        class={className}
         target={target}
         download={downloadAttr(download)}
         rel={rel}
