@@ -76,7 +76,7 @@ const App = cc(() => {
     <div>
       <nav>
         <Link href="/">Home</Link>
-        <NavLink href="/about" activeClass="active">
+        <NavLink href="/about" class={({ isActive }) => (isActive ? "active" : undefined)}>
           About
         </NavLink>
       </nav>
@@ -165,12 +165,15 @@ router.dispose();
   Docs
 </Link>
 
-<NavLink href="/users" activeClass="active" class="nav">
+<NavLink
+  href="/users"
+  class={({ isActive }) => (isActive ? "nav active" : "nav")}
+>
   Users
 </NavLink>
 ```
 
-`NavLink` is active on an exact match or a nested prefix (`/users` matches `/users/42`). Prefetch on hover is on by default; pass `prefetch={false}` to disable.
+`NavLink` is active on an exact match or a nested prefix (`/users` matches `/users/42`). Pass `class={({ isActive }) => …}` to choose active vs idle styles (avoids Tailwind utility clashes). With no `class` prop, active links get `"active"` for CSS selectors. Prefetch on hover is on by default; pass `prefetch={false}` to disable.
 
 ## Outlet
 
@@ -183,7 +186,7 @@ router.dispose();
 | ----------- | -------------------------------------------------------------------- |
 | `depth`     | `0` is the root match; `1` is the first nested child, and so on     |
 | `fallback`  | Shown while a lazy import is in flight                               |
-| `notFound`  | Shown at depth `0` when nothing matches; nested outlets render nothing |
+| `notFound`  | Shown at depth `0` when nothing matches; nested outlets render nothing. Omit to use the built-in styled 404 (path + home link). |
 | `error`     | Shown when a lazy import rejects (`{ error?: unknown }` props)       |
 
 Put `<RouterOutlet depth={1} />` inside a parent layout to render the child.

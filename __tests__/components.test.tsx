@@ -177,22 +177,66 @@ describe("Link", () => {
       teardownWindow();
     }
   });
+
+  test("forwards Slot passthrough props and composes mouseenter", () => {
+    setupWindow();
+    try {
+      const router = createRouter(
+        [{ path: "/about", component: () => Promise.resolve({ default: About }) }],
+        "/",
+      );
+      let tipOpen = false;
+      let leaveCount = 0;
+      const node = asVNode(
+        withRouter(router, () =>
+          Link({
+            href: "/about",
+            prefetch: true,
+            "data-slot": "sidebar-menu-button",
+            "data-sidebar": "menu-button",
+            onmouseenter: () => {
+              tipOpen = true;
+            },
+            onmouseleave: () => {
+              leaveCount += 1;
+            },
+            ref: () => {},
+            children: "About",
+          }),
+        ),
+      );
+      expect(node.props["data-slot"]).toBe("sidebar-menu-button");
+      expect(node.props["data-sidebar"]).toBe("menu-button");
+      expect(typeof node.props.ref).toBe("function");
+      expect(typeof node.props.onmouseleave).toBe("function");
+      mouseEnterHandler(node)();
+      expect(tipOpen).toBe(true);
+      expect(
+        router.peekLazy("/about").status === "loading" ||
+          router.peekLazy("/about").status === "ready",
+      ).toBe(true);
+      const leave = node.props.onmouseleave;
+      if (typeof leave !== "function") throw new Error("expected onmouseleave");
+      leave();
+      expect(leaveCount).toBe(1);
+    } finally {
+      teardownWindow();
+    }
+  });
 });
 
 describe("NavLink", () => {
-  test("applies the active class for exact and nested paths", () => {
+  test("resolves class from an isActive callback", () => {
     const exact = asVNode(
       withRouter(createRouter(routes, "/about"), () =>
         NavLink({
           href: "/about",
-          activeClass: "current",
-          class: "nav",
+          class: ({ isActive }) => (isActive ? "nav current" : "nav"),
           children: "About",
         }),
       ),
     );
-    expect(classOf(exact)).toContain("current");
-    expect(classOf(exact)).toContain("nav");
+    expect(classOf(exact)).toBe("nav current");
 
     const nested = asVNode(
       withRouter(createRouter(routes, "/users/42"), () =>
@@ -203,10 +247,23 @@ describe("NavLink", () => {
 
     const idle = asVNode(
       withRouter(createRouter(routes, "/"), () =>
-        NavLink({ href: "/about", children: "About" }),
+        NavLink({
+          href: "/about",
+          class: ({ isActive }) => (isActive ? "nav current" : "nav"),
+          children: "About",
+        }),
       ),
     );
-    expect(classOf(idle)).toBe("");
+    expect(classOf(idle)).toBe("nav");
+  });
+
+  test("keeps a static class string", () => {
+    const node = asVNode(
+      withRouter(createRouter(routes, "/about"), () =>
+        NavLink({ href: "/about", class: "nav-item", children: "About" }),
+      ),
+    );
+    expect(classOf(node)).toBe("nav-item");
   });
 
   test("click and prefetch behave like Link", () => {
@@ -263,6 +320,31 @@ describe("NavLink", () => {
       teardownWindow();
     }
   });
+
+  test("forwards Slot passthrough props onto the anchor", () => {
+    const router = createRouter(routes, "/");
+    let tipOpen = false;
+    const node = asVNode(
+      withRouter(router, () =>
+        NavLink({
+          href: "/about",
+          class: ({ isActive }) => (isActive ? "current" : undefined),
+          "data-slot": "sidebar-menu-button",
+          onmouseenter: () => {
+            tipOpen = true;
+          },
+          onmouseleave: () => {},
+          children: "About",
+        }),
+      ),
+    );
+    expect(node.props["data-slot"]).toBe("sidebar-menu-button");
+    expect(typeof node.props.class === "function" || typeof node.props.class === "object").toBe(
+      true,
+    );
+    mouseEnterHandler(node)();
+    expect(tipOpen).toBe(true);
+  });
 });
 
 describe("RouterOutlet", () => {
@@ -296,7 +378,48 @@ describe("RouterOutlet", () => {
     );
     expect(fallback404?.tag).toBeDefined();
     if (fallback404 && typeof fallback404.tag === "function") {
-      (fallback404.tag as () => unknown)();
+      const tree = withRouter(router, () =>
+        (fallback404.tag as () => {
+          props?: {
+            role?: string;
+            style?: Record<string, unknown>;
+            children?: unknown;
+          };
+        })(),
+      );
+      expect(tree.props?.role).toBe("main");
+      expect(tree.props?.style).toBeDefined();
+      const serialized = JSON.stringify(tree);
+      expect(serialized).toContain("Page not found");
+      expect(serialized).toContain("Back to home");
+      expect(serialized).toContain("/");
+      const pathText = (node: unknown): string | undefined => {
+        if (typeof node === "function") {
+          const value = (node as () => unknown)();
+          return typeof value === "string" ? value : undefined;
+        }
+        if (node == null || typeof node !== "object") return undefined;
+        if (Array.isArray(node)) {
+          for (const item of node) {
+            const found = pathText(item);
+            if (found !== undefined) return found;
+          }
+          return undefined;
+        }
+        const record = node as {
+          tag?: unknown;
+          children?: unknown;
+          props?: { children?: unknown };
+        };
+        if (record.tag === "code") {
+          return pathText(record.children ?? record.props?.children);
+        }
+        return (
+          pathText(record.children) ??
+          pathText(record.props?.children)
+        );
+      };
+      expect(pathText(tree)).toBe("/missing");
     }
   });
 

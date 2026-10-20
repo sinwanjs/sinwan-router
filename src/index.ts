@@ -48,6 +48,8 @@ export { Link, NavLink, RouterOutlet } from "./components.tsx";
 export type {
   LinkProps,
   NavLinkProps,
+  NavLinkClassOptions,
+  NavLinkClassFunction,
   RouterOutletProps,
 } from "./components.tsx";
 export {
