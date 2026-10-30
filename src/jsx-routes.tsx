@@ -7,7 +7,12 @@ import type { SinwanComponent, SinwanElement, SinwanNode } from "sinwan/componen
 import { createRouter } from "./router.ts";
 import { RouterOutlet } from "./components.tsx";
 import { RouterKey } from "./hooks.ts";
-import type { RouteComponent, RouteDefinition } from "./types.ts";
+import type {
+  RouteComponent,
+  RouteDefinition,
+  RouterOptions,
+  RouterScroll,
+} from "./types.ts";
 
 export const ROUTE_TYPE = Symbol.for("sinwan.router.Route");
 
@@ -25,6 +30,7 @@ export interface RoutesProps {
   notFound?: SinwanComponent;
   error?: SinwanComponent<{ error?: unknown }>;
   initialPath?: string;
+  scroll?: RouterScroll;
 }
 
 function isElementLike(value: unknown): value is SinwanElement {
@@ -149,8 +155,11 @@ export function layoutNodes(children: unknown): SinwanNode[] {
  * siblings such as `<NavLink>`, and renders a `<RouterOutlet />`.
  */
 export const Routes = cc<RoutesProps>(
-  ({ children, fallback, notFound, error, initialPath }) => {
-    const router = createRouter(collectRouteDefinitions(children), initialPath);
+  ({ children, fallback, notFound, error, initialPath, scroll }) => {
+    const router = createRouter(collectRouteDefinitions(children), {
+      initialPath,
+      scroll,
+    });
     provide(RouterKey, router);
     onDispose(() => {
       router.dispose();

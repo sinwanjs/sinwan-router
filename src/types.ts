@@ -52,6 +52,32 @@ export interface NavigateOptions {
   replace?: boolean;
   /** Optional state object to associate with the history entry. */
   state?: unknown;
+  /**
+   * Set to `false` to skip the router's `scroll` handling for this one
+   * navigation (for example, a query-param tab switch).
+   */
+  scroll?: boolean;
+}
+
+/**
+ * Window scroll after client navigation.
+ * - `"preserve"`: leave the scroll position alone (default).
+ * - `"top"`: scroll to the top, or to the element named by the URL `#hash`
+ *   once the route has rendered (lazy routes included).
+ */
+export type RouterScroll = "preserve" | "top";
+
+/** Options for `createRouter` / `new Router`. */
+export interface RouterOptions {
+  /** Starting path. Defaults to `window.location` on the client, `/` on the server. */
+  initialPath?: string;
+  /**
+   * Window scroll after `navigate()` (Link, NavLink, `useNavigate`).
+   * With `"top"`, the hash of the first page load is revealed too.
+   * Back/forward keep the browser's own scroll restoration.
+   * @default "preserve"
+   */
+  scroll?: RouterScroll;
 }
 
 // ─── Router Context ────────────────────────────────────────

@@ -111,7 +111,7 @@ const App = cc(() => (
 ));
 ```
 
-`Routes` collects `<Route>` children into a router, provides `RouterKey` to layout siblings (`Link`, `NavLink`), and renders a `<RouterOutlet />`. Put links **inside** `<Routes>` — they need that context. You can still pass `fallback`, `notFound`, `error`, and `initialPath`.
+`Routes` collects `<Route>` children into a router, provides `RouterKey` to layout siblings (`Link`, `NavLink`), and renders a `<RouterOutlet />`. Put links **inside** `<Routes>` — they need that context. You can still pass `fallback`, `notFound`, `error`, `initialPath`, and `scroll`.
 
 ## Routes
 
@@ -155,6 +155,24 @@ router.dispose();
 ```
 
 `prefetch` and `RouterOutlet` share the same instance cache. `dispose()` removes the `popstate` listener and drops that cache.
+
+### Scroll after navigation
+
+By default the router leaves the window scroll alone (`scroll: "preserve"`). For a site where each page should open at the top, use `scroll: "top"`:
+
+```tsx
+const router = createRouter(routes, { scroll: "top" });
+// or
+<Routes scroll="top">…</Routes>
+```
+
+- `navigate()` (and so `Link`, `NavLink`, `useNavigate`) scrolls the window to the top.
+- An href with a hash (`/products#pricing`) scrolls to the element with that id once the route has rendered, waiting for lazy routes. Use `scroll-margin-top` on the target to clear a sticky header.
+- The hash of the first page load is revealed the same way.
+- Back and forward keep the browser's own scroll restoration.
+- `navigate(to, { scroll: false })` skips one navigation, for example a query-param tab switch.
+
+`createRouter(routes, "/path")` still sets the initial path; `createRouter(routes, { initialPath: "/path" })` is the same.
 
 ```tsx
 <Link href="/users/1" class="nav">
@@ -216,7 +234,7 @@ navigate("/about", { replace: true });
 ## Features
 
 - Radix-tree matcher: `createRadixTree`, `radixInsert`, `radixSearch`, `buildPath`, `normalizePath`
-- Router: `createRouter`, `navigate`, `prefetch`, `resolveComponent`, `dispose`, `lazy` / `isLazyComponent`
+- Router: `createRouter` (`initialPath`, `scroll`), `navigate`, `prefetch`, `resolveComponent`, `dispose`, `lazy` / `isLazyComponent`
 - Components: `Link`, `NavLink`, `RouterOutlet`, `Routes`, `Route`
 - Hooks: `useRouter`, `useParams`, `useSearchParams`, `useRoute`, `useNavigate`, `usePath`, `RouterKey`
 

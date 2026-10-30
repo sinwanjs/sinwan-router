@@ -2,6 +2,16 @@
 
 All notable changes to **sinwan-router** are documented in this file. The format follows [Keep a Changelog](https://keepachangelog.com/) and sinwan-router adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.1.0] — Scroll After Navigation
+
+sinwan-router 1.1.0 adds an opt-in `scroll` option. Existing apps keep the 1.0 behaviour. Peer **sinwan >= 2.0.0 &lt; 3.0.0**.
+
+### Added
+
+- **`scroll: "top"` (`createRouter`, `<Routes scroll>`)**: `navigate()`, and so `Link`, `NavLink` and `useNavigate`, scrolls the window to the top. A `#hash` in the href scrolls to that element once the route has rendered, after lazy routes load. The first page load's hash is revealed the same way. Back and forward keep the browser's own scroll restoration. The default `"preserve"` does not touch scroll.
+- **`NavigateOptions.scroll`**: `navigate(to, { scroll: false })` skips scroll handling for one navigation.
+- **`RouterOptions` and `RouterScroll`**: Exported types. `createRouter(routes, options)` and `new Router(routes, options)` take `{ initialPath, scroll }`; a string second argument is still the initial path.
+
 ## [1.0.3] — Sinwan 2.0, NavLink `class`, and Styled 404
 
 sinwan-router 1.0.3 targets **sinwan 2.0.0**. `Key` comes from `sinwan/control-flow`. Pair with **bun-plugin-sinwan 1.0.0**.

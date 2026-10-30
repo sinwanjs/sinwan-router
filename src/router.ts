@@ -15,6 +15,8 @@ import type {
   NavigateOptions,
   LazyComponent,
   LazyPeek,
+  RouterOptions,
+  RouterScroll,
 } from "./types.ts";
 import {
   createRadixTree,
@@ -24,6 +26,7 @@ import {
   extractSearchParams,
   type RadixNode,
 } from "./matcher.ts";
+import { findHashTarget, hashFromHref, nextFrame } from "./scroll.ts";
 
 function hasTrueFlag(value: object, key: string): boolean {
   return key in value && (value as Record<string, unknown>)[key] === true;
@@ -71,8 +74,17 @@ export class Router {
   private readonly lazyInflight = new Map<string, Promise<SinwanComponent>>();
   private readonly _lazyTick: Signal<number>;
   private popstateHandler: (() => void) | null = null;
+  private readonly scroll: RouterScroll;
+  /** Bumped per navigation so a stale pending hash reveal is dropped. */
+  private scrollToken = 0;
 
-  constructor(routes: RouteDefinition[], initialPath?: string) {
+  /**
+   * @param options Router options, or the initial path (1.0 signature).
+   */
+  constructor(routes: RouteDefinition[], options: string | RouterOptions = {}) {
+    const { initialPath, scroll = "preserve" }: RouterOptions =
+      typeof options === "string" ? { initialPath: options } : options;
+    this.scroll = scroll;
     this.tree = createRadixTree();
     this.routeList = [];
     this._lazyTick = signal(0);
@@ -136,6 +148,11 @@ export class Router {
         this._searchParams.value = extractSearchParams(url);
       };
       window.addEventListener("popstate", this.popstateHandler);
+
+      if (this.scroll === "top") {
+        const initialHash = hashFromHref(window.location.hash);
+        if (initialHash) this.revealHash(initialHash);
+      }
     }
   }
 
@@ -265,6 +282,36 @@ export class Router {
 
     this._path.value = normalized;
     this._searchParams.value = extractSearchParams(to);
+    if (options.scroll !== false) this.applyScroll(to);
+  }
+
+  /** `scroll: "top"`: jump to the top, then to the `#hash` target once rendered. */
+  private applyScroll(to: string): void {
+    if (this.scroll !== "top" || typeof window === "undefined") return;
+    this.scrollToken++;
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    const hash = hashFromHref(to);
+    if (hash) this.revealHash(hash);
+  }
+
+  private revealHash(hash: string): void {
+    const token = ++this.scrollToken;
+    void this.whenRouteRendered().then(() => {
+      if (token !== this.scrollToken) return;
+      findHashTarget(window.document, hash)?.scrollIntoView();
+    });
+  }
+
+  /** Waits for the matched chain's lazy components, then one frame for the DOM. */
+  private async whenRouteRendered(): Promise<void> {
+    const loads: Promise<SinwanComponent>[] = [];
+    for (let m = this._matched.value ?? undefined; m; m = m.parent) {
+      if (isLazyComponent(m.route.component)) {
+        loads.push(this.resolveComponent(m.route));
+      }
+    }
+    await Promise.allSettled(loads);
+    await nextFrame(window);
   }
 
   /** Prefetch a route's lazy component into this router's cache. */
@@ -335,6 +382,7 @@ export class Router {
       window.removeEventListener("popstate", this.popstateHandler);
       this.popstateHandler = null;
     }
+    this.scrollToken++;
     this.lazyCache.clear();
     this.lazyErrors.clear();
     this.lazyInflight.clear();
@@ -350,10 +398,13 @@ function joinPaths(parent: string, child: string): string {
   return parent + "/" + relativeChild;
 }
 
-/** Create a router instance. */
+/**
+ * Create a router instance.
+ * @param options Router options, or the initial path (1.0 signature).
+ */
 export function createRouter(
   routes: RouteDefinition[],
-  initialPath?: string,
+  options?: string | RouterOptions,
 ): Router {
-  return new Router(routes, initialPath);
+  return new Router(routes, options);
 }

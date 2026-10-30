@@ -79,6 +79,8 @@ export type {
   LazyComponent,
   MatchedRoute,
   NavigateOptions,
+  RouterOptions,
+  RouterScroll,
   RouterContextValue,
   LazyPeek,
 } from "./types.ts";
