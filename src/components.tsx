@@ -221,8 +221,8 @@ export interface RouterOutletProps {
   depth?: number;
 }
 
-/** Credit Blue palette (sinwan-ui default) — inline so the router needs no CSS import. */
-const creditBlue = {
+/** Carzow palette (sinwan-ui default) — inline so the router needs no CSS import. */
+const carzow = {
   background: "oklch(0.98 0.004 250)",
   foreground: "oklch(0.18 0.03 255)",
   primary: "oklch(0.55 0.22 262)",
@@ -253,8 +253,8 @@ const defaultNotFoundShellStyle = {
   justifyContent: "center",
   padding: "2.5rem 1.25rem",
   boxSizing: "border-box",
-  background: creditBlue.ambientBackground,
-  color: creditBlue.foreground,
+  background: carzow.ambientBackground,
+  color: carzow.foreground,
   fontFamily:
     'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
 } as const;
@@ -265,8 +265,8 @@ const defaultNotFoundCardStyle = {
   textAlign: "center",
   padding: "2.25rem 1.75rem",
   borderRadius: "calc(0.625rem * 1.4)",
-  background: creditBlue.card,
-  border: `1px solid ${creditBlue.border}`,
+  background: carzow.card,
+  border: `1px solid ${carzow.border}`,
   boxShadow: "0 18px 50px oklch(0.55 0.22 262 / 0.08)",
 } as const;
 
@@ -275,8 +275,8 @@ const defaultNotFoundCodeStyle = {
   margin: "0 0.15em",
   padding: "0.12em 0.4em",
   borderRadius: "calc(0.625rem * 0.6)",
-  background: creditBlue.muted,
-  color: creditBlue.secondaryForeground,
+  background: carzow.muted,
+  color: carzow.secondaryForeground,
   fontFamily:
     'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
   fontSize: "0.88em",
@@ -286,9 +286,9 @@ const defaultNotFoundCodeStyle = {
 const defaultNotFoundLinkStyle = {
   display: "inline-block",
   padding: "0.65rem 1.2rem",
-  borderRadius: creditBlue.radius,
-  background: creditBlue.brandGradient,
-  color: creditBlue.primaryForeground,
+  borderRadius: carzow.radius,
+  background: carzow.brandGradient,
+  color: carzow.primaryForeground,
   textDecoration: "none",
   fontSize: "0.9rem",
   fontWeight: 600,
@@ -314,7 +314,7 @@ const DefaultNotFound = cc(() => {
             fontWeight: 700,
             letterSpacing: "-0.06em",
             lineHeight: 1,
-            background: creditBlue.brandGradient,
+            background: carzow.brandGradient,
             backgroundClip: "text",
             WebkitBackgroundClip: "text",
             color: "transparent",
@@ -329,7 +329,7 @@ const DefaultNotFound = cc(() => {
             fontSize: "1.5rem",
             fontWeight: 600,
             letterSpacing: "-0.02em",
-            color: creditBlue.foreground,
+            color: carzow.foreground,
           }}
         >
           Page not found
@@ -339,7 +339,7 @@ const DefaultNotFound = cc(() => {
             margin: "0 0 1.75rem",
             fontSize: "0.95rem",
             lineHeight: 1.55,
-            color: creditBlue.mutedForeground,
+            color: carzow.mutedForeground,
           }}
         >
           No route matches{" "}
@@ -361,18 +361,18 @@ const defaultStatusShellStyle = {
   justifyContent: "center",
   padding: "2rem 1.25rem",
   boxSizing: "border-box",
-  background: creditBlue.ambientBackground,
-  color: creditBlue.foreground,
+  background: carzow.ambientBackground,
+  color: carzow.foreground,
   fontFamily:
     'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
 } as const;
 
 const defaultStatusCardStyle = {
   padding: "1.25rem 1.5rem",
-  borderRadius: creditBlue.radius,
-  background: creditBlue.card,
-  border: `1px solid ${creditBlue.border}`,
-  color: creditBlue.secondaryForeground,
+  borderRadius: carzow.radius,
+  background: carzow.card,
+  border: `1px solid ${carzow.border}`,
+  color: carzow.secondaryForeground,
   fontSize: "0.95rem",
   fontWeight: 500,
   boxShadow: "0 12px 32px oklch(0.55 0.22 262 / 0.06)",
@@ -390,7 +390,7 @@ const DefaultError = cc<{ error?: unknown }>(() => (
       style={{
         ...defaultStatusCardStyle,
         borderColor: "oklch(0.55 0.22 262 / 0.35)",
-        color: creditBlue.foreground,
+        color: carzow.foreground,
       }}
     >
       Failed to load page

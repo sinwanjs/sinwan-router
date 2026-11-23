@@ -1,6 +1,6 @@
 {
   "name": "sinwan-router",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Client-side router for Sinwan apps — declarative route matching, params, lazy loading, and prefetching built on Sinwan's reactivity system.",
   "author": "Mohammed Ben Cheikh",
   "license": "MIT",
@@ -45,6 +45,6 @@
   "devDependencies": {
     "@types/bun": "latest",
     "bun-plugin-sinwan": ">=1.0.0 <2.0.0",
-    "happy-dom": "^20.14.5"
+    "happy-dom": "^20.14.6"
   }
 }

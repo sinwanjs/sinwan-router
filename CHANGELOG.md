@@ -2,6 +2,12 @@
 
 All notable changes to **sinwan-router** are documented in this file. The format follows [Keep a Changelog](https://keepachangelog.com/) and sinwan-router adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.1.1] — Carzow palette name
+
+### Changed
+
+- The inline palette behind the default 404, loading and error screens is named after sinwan-ui's renamed default palette, Carzow (formerly Credit Blue). Colors and output are unchanged.
+
 ## [1.1.0] — Scroll After Navigation
 
 sinwan-router 1.1.0 adds an opt-in `scroll` option. Existing apps keep the 1.0 behaviour. Peer **sinwan >= 2.0.0 &lt; 3.0.0**.
